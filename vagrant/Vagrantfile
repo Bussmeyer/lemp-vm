@@ -1,0 +1,53 @@
+# encoding: UTF-8
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+##################
+# Config
+##################
+box       = "centos-6-4"
+box_url   = "http://puppet-vagrant-boxes.puppetlabs.com/centos-64-x64-vbox4210.box"
+
+nodes = [
+  { :hostname => 'web.local', :ip => "192.168.2.202", :ram => 512, :manifest => "web.pp" , :has_fileshare => false},
+]
+##################
+
+
+require 'rbconfig'
+is_windows = (RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/)
+is_nix = (RUBY_PLATFORM =~ /linux/ or RUBY_PLATFORM =~ /darwin/)
+
+Vagrant.configure("2") do |config|
+  nodes.each do |node|
+    config.vm.define node[:hostname] do |node_config|
+      node_config.vm.box = box
+      node_config.vm.box_url = box_url
+      node_config.vm.hostname = node[:hostname]
+      node_config.vm.network :private_network, ip: node[:ip]
+      node_config.ssh.forward_agent = true
+
+      node_config.vm.provider :virtualbox do |v|
+        memory = node[:ram] ? node[:ram] : 512
+        v.customize ["modifyvm", :id, "--name", node[:hostname] + "_" + Time.now.strftime("%s")]
+        v.customize ["modifyvm", :id, "--memory", memory.to_s]
+        v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+        v.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
+        v.customize ["modifyvm", :id, '--chipset', 'ich9'] # solves kernel panic issue on some host machines
+        v.customize ["modifyvm", :id, "--ioapic", "on"]
+      end
+
+      if (is_nix and node[:has_fileshare])
+        node_config.vm.synced_folder "../share", "/var/www/" + node[:hostname], :nfs => true
+      end
+
+      node_config.vm.provision :puppet do |puppet|
+        manifest = node[:manifest] ? node[:manifest] : "base.pp"
+        puppet.manifests_path = "../puppet/manifests"
+        puppet.manifest_file = manifest
+        puppet.module_path = "../puppet/modules"
+        puppet.options = ["--verbose --trace --summarize --environment=local"]
+      end
+    end
+  end
+end
