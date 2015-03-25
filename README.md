@@ -13,5 +13,5 @@
 6. vagrant up
 
 ## Hosts
-Insert this in your /etc/hosts
+Insert this in your /etc/hosts  
 192.168.2.202 books.pages.local  
